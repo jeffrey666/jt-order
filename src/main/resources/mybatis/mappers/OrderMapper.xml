@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jt.order.mapper.OrderMapper">
+
+	<resultMap type="Order" id="orderRM" autoMapping="true">
+		<id column="order_id" property="orderId"/>
+		<!-- 一对一关联 -->
+		<association property="orderShipping" javaType="OrderShipping" column="order_id" select="queryOrderShipping" autoMapping="true"></association>
+		<!-- 一对多关联 -->
+		<collection property="orderItems" javaType="ArrayList" ofType="OrderItem" select="queryOrderItems" column="order_id" autoMapping="true" ></collection>
+	</resultMap>
+	
+	
+	<select id="queryOrderByOrderId" resultMap="orderRM">
+		select * from tb_order where order_id = #{orderId}
+	</select>
+	
+	<select id="queryOrderItems" resultType="OrderItem">
+		select * from tb_order_item where order_id = #{orderId}
+	</select>
+	
+	<select id="queryOrderShipping" resultType="OrderShipping">
+		select * from tb_order_shipping where order_id= #{orderId}
+	</select>
+
+	<!-- 新增，mysql支持批量插入，数据库事务保证 -->
+	<insert id="orderCreate" parameterType="Order">
+		<!-- 创建订单主信息 -->
+		insert into tb_order (
+			order_id,
+			payment,
+			payment_type,
+			post_fee,
+			status,
+			created,
+			updated,
+			payment_time,
+			consign_time,
+			end_time,
+			close_time,
+			shipping_name,
+			shipping_code,
+			user_id,
+			buyer_message,
+			buyer_nick,
+			buyer_rate
+		)
+		values(
+			#{orderId},
+			#{payment},
+			#{paymentType},
+			#{postFee},
+			#{status},
+			now(),
+			now(),
+			#{paymentTime},
+			#{consignTime},
+			#{endTime},
+			#{closeTime},
+			#{shippingName},
+			#{shippingCode},
+			#{userId},
+			#{buyerMessage},
+			#{buyerNick},
+			#{buyerRate}
+		);
+		<!-- 创建订单下商品详情信息 -->
+		insert into tb_order_item (
+			item_id,
+			order_id,
+			num,
+			title,
+			price,
+			total_fee,
+			pic_path
+		)
+		values
+		<foreach collection="orderItems" item="item" separator=",">
+		(
+			#{item.itemId},
+			#{orderId},
+			#{item.num},
+			#{item.title},
+			#{item.price},
+			#{item.totalFee},
+			#{item.picPath}
+		)
+		</foreach>;
+		<!-- 创建订单下物流信息 -->
+		<!-- insert into tb_order_shipping (
+			order_id,
+			receiver_name,
+			receiver_phone,
+			receiver_mobile,
+			receiver_state,
+			receiver_city,
+			receiver_district,
+			receiver_address,
+			receiver_zip,
+			updated,
+			created
+		)
+		values(
+		#{orderId},
+		#{receiverName},
+		#{receiverPhone},
+		#{receiverMobile},
+		#{receiverState},
+		#{receiverCity},
+		#{receiverDistrict},
+		#{receiverAddress},
+		#{receiverZip},
+		now(),
+		now()
+		) -->
+		insert into tb_order_shipping (order_id, receiver_name, receiver_phone, 
+      receiver_mobile, receiver_state, receiver_city, 
+      receiver_district, receiver_address, receiver_zip, 
+      created, updated)
+    values (#{orderId,jdbcType=VARCHAR}, 
+      #{orderShipping.receiverName,jdbcType=VARCHAR}, #{orderShipping.receiverPhone,jdbcType=VARCHAR}, 
+      #{orderShipping.receiverMobile,jdbcType=VARCHAR}, #{orderShipping.receiverState,jdbcType=VARCHAR}, #{orderShipping.receiverCity,jdbcType=VARCHAR}, 
+      #{orderShipping.receiverDistrict,jdbcType=VARCHAR}, #{orderShipping.receiverAddress,jdbcType=VARCHAR}, #{orderShipping.receiverZip,jdbcType=VARCHAR}, 
+      now(), now());
+	</insert>
+	<!-- 定时任务，更新为支付订单的状态 -->
+	<update id="paymentOrderScan" parameterType="Date">
+		update tb_order set 
+		status = 6,
+		updated=now(),
+		end_time=now(),
+		close_time=now()
+		where status =1 and payment_type=1 and created &lt; #{date}
+	</update>
+</mapper>
